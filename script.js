@@ -1,5 +1,6 @@
 // --- ESTADO GLOBAL ---
 let haSocket = null;
+let chartInstances = {};
 let haStates = {}; // Almacena todos los estados
 let haDevices = {}; // Almacena todos los devices
 let haAreas = {}; // Almacena todas las areas
@@ -25,7 +26,20 @@ document.addEventListener("DOMContentLoaded", () => {
         float: true
     });
     grid.on('change', saveLayout);
-    grid.on('removed', saveLayout);
+    grid.on('removed', (event, items) => {
+        items.forEach(item => {
+            const id = item.id;
+            if (id && id.startsWith('graph-')) {
+                const entityId = id.substring(6);
+                const canvasId = `chart-${entityId}`;
+                if (chartInstances[canvasId]) {
+                    chartInstances[canvasId].destroy();
+                    delete chartInstances[canvasId];
+                }
+            }
+        });
+        saveLayout();
+    });
     grid.on('dragstart', function(event, el) {
         if (longPressTimer) {
             clearTimeout(longPressTimer);
@@ -277,6 +291,39 @@ function callService(domain, service, serviceData) {
     }));
 }
 
+function callServiceWithResult(domain, service, target, service_data) {
+    return new Promise((resolve, reject) => {
+        const id = messageId++;
+        const onResult = (e) => {
+            const d = JSON.parse(e.data);
+            if (d.id === id) {
+                haSocket.removeEventListener('message', onResult);
+                if (d.success) {
+                    resolve(d.result);
+                } else {
+                    reject(d.error);
+                }
+            }
+        };
+        haSocket.addEventListener('message', onResult);
+
+        const message = {
+            id: id,
+            type: 'call_service',
+            domain: domain,
+            service: service,
+            target: target,
+            return_response: true
+        };
+
+        if (service_data) {
+            message.service_data = service_data;
+        }
+
+        haSocket.send(JSON.stringify(message));
+    });
+}
+
 // --- LÓGICA DEL GRID & WIDGETS ---
 function addDeleteButton(widgetElement) {
     const contentElement = widgetElement.querySelector('.grid-stack-item-content');
@@ -308,6 +355,9 @@ function loadDashboardLayout() {
             if (!widgetData) return;
             const content = item.querySelector('.grid-stack-item-content');
             if (!content) return;
+
+            const domain = widgetId.split('.')[0];
+
             if (widgetId.startsWith('camera-') && widgetData.url) {
                 // This is a camera widget
                 item.dataset.url = widgetData.url; // restore url to dataset
@@ -325,7 +375,10 @@ function loadDashboardLayout() {
             } else if (widgetId.startsWith('graph-')) {
                 const entityId = widgetId.substring(6);
                 renderGraphWidgetContent(content, entityId);
-            } else if (!widgetId.startsWith('camera-')) {
+            } else if (domain === 'weather') {
+                renderWeatherWidgetContent(content, widgetId);
+            }
+            else if (!widgetId.startsWith('camera-')) {
                 // This is an entity widget
                 renderWidgetContent(content, widgetId);
             }
@@ -357,9 +410,23 @@ function saveLayout() {
 }
 
 function addWidget(entityId) {
-    const newWidgetEl = grid.addWidget({ w: 2, h: 2, id: entityId, content: '' });
+    const domain = entityId.split('.')[0];
+    if (domain === 'weather') {
+        addWeatherWidget(entityId);
+    } else {
+        const newWidgetEl = grid.addWidget({ w: 2, h: 2, id: entityId, content: '' });
+        const el = newWidgetEl.querySelector('.grid-stack-item-content');
+        renderWidgetContent(el, entityId);
+        addDeleteButton(newWidgetEl);
+        closeModal('add-modal');
+        saveLayout();
+    }
+}
+
+function addWeatherWidget(entityId) {
+    const newWidgetEl = grid.addWidget({ w: 2, h: 3, id: entityId, content: '' });
     const el = newWidgetEl.querySelector('.grid-stack-item-content');
-    renderWidgetContent(el, entityId);
+    renderWeatherWidgetContent(el, entityId);
     addDeleteButton(newWidgetEl);
     closeModal('add-modal');
     saveLayout();
@@ -409,25 +476,61 @@ function handleTap(entityId) {
 function updateWidgetUI(entityId) {
     const stateEl = document.getElementById(`state-${entityId}`);
     const iconEl = document.getElementById(`icon-${entityId}`);
-    const widgetContent = iconEl?.parentElement;
+    const graphStateEl = document.getElementById(`state-graph-${entityId}`);
     const entity = haStates[entityId];
-    if (!entity || !stateEl) return;
-    stateEl.innerText = entity.state;
-    if (entity.attributes.icon) {
-        const iconName = entity.attributes.icon.split(':')[1];
-        iconEl.innerHTML = `<span class="mdi mdi-${iconName}" style="font-size: 28px; line-height: 1;"></span>`;
-    } else {
-        const domain = entityId.split('.')[0];
-        let icon = "❓";
-        if (domain === 'light') icon = "💡";
-        if (domain === 'switch') icon = "🔌";
-        if (domain === 'sensor') icon = "🌡️";
-        iconEl.innerText = icon;
+    if (!entity) return;
+
+    const domain = entityId.split('.')[0];
+    if (domain === 'weather') {
+        updateWeatherWidgetUI(entityId);
+        return;
     }
-    if (entity.state === 'on') {
-        widgetContent.classList.add('active-state');
-    } else {
-        widgetContent.classList.remove('active-state');
+
+    if (stateEl) {
+        const state = entity.state;
+
+        if ((domain === 'light' || domain === 'switch') && (state === 'on' || state === 'off')) {
+            stateEl.innerText = '';
+        } else {
+            let stateText = state;
+            if (entity.attributes.unit_of_measurement) {
+                stateText += ` ${entity.attributes.unit_of_measurement}`;
+            }
+            stateEl.innerText = stateText;
+        }
+    }
+
+    if (graphStateEl) {
+        const numericState = parseFloat(entity.state);
+        if (!isNaN(numericState)) {
+            let stateText = numericState.toFixed(2);
+            if (entity.attributes.unit_of_measurement) {
+                stateText += ` ${entity.attributes.unit_of_measurement}`;
+            }
+            graphStateEl.innerText = stateText;
+        }
+    }
+
+    if (iconEl) {
+        const widgetContent = iconEl.parentElement;
+        if (entity.attributes.icon) {
+            const iconName = entity.attributes.icon.split(':')[1];
+            iconEl.innerHTML = `<span class="mdi mdi-${iconName}" style="font-size: 28px; line-height: 1;"></span>`;
+        } else {
+            const domain = entityId.split('.')[0];
+            let icon = "❓";
+            if (domain === 'light') icon = "💡";
+            if (domain === 'switch') icon = "🔌";
+            if (domain === 'sensor') icon = "🌡️";
+            iconEl.innerText = icon;
+        }
+        if (widgetContent) {
+            if (entity.state === 'on') {
+                widgetContent.classList.add('active-state');
+            } else {
+                widgetContent.classList.remove('active-state');
+            }
+        }
     }
 }
 
@@ -564,6 +667,7 @@ function renderEntityList(filters = {}) {
                 if (domain === 'light') icon = "💡";
                 if (domain === 'switch') icon = "🔌";
                 if (domain === 'sensor') icon = "🌡️";
+                if (domain === 'weather') icon = "🌦️";
                 iconHtml = `<span style="margin-right: 10px; min-width: 24px;">${icon}</span>`;
             }
             div.innerHTML = `
@@ -747,12 +851,27 @@ function renderGraphWidgetContent(container, entityId) {
     const canvasId = `chart-${entityId}`;
     container.innerHTML = `
         <div class="entity-name">${name}</div>
-        <div class="chart-container" style="position: relative; height: 80%; width: 100%;">
+        <div class="entity-state" id="state-graph-${entityId}" style="font-size: 20px; font-weight: 500;">...</div>
+        <div class="chart-container" style="position: relative; flex-grow: 1; width: 100%; min-height: 0;">
             <canvas id="${canvasId}"></canvas>
         </div>
     `;
+    updateWidgetUI(entityId);
     fetchHistoryAndRenderChart(entityId, canvasId);
 }
+
+function simplifyData(data, maxPoints = 200) {
+    if (data.length <= maxPoints) {
+        return data;
+    }
+    const simplified = [];
+    const step = Math.floor(data.length / maxPoints);
+    for (let i = 0; i < data.length; i += step) {
+        simplified.push(data[i]);
+    }
+    return simplified;
+}
+
 
 function fetchHistoryAndRenderChart(entityId, canvasId) {
     const endDate = new Date();
@@ -770,38 +889,48 @@ function fetchHistoryAndRenderChart(entityId, canvasId) {
         const data = JSON.parse(e.data);
         if (data.id === historyId) {
             haSocket.removeEventListener('message', onHistoryResult);
-            console.log('History data received for', entityId, data.result);
             const history = data.result[entityId];
             const canvas = document.getElementById(canvasId);
             const ctx = canvas?.getContext('2d');
 
             if (!ctx) return;
 
+            if (chartInstances[canvasId]) {
+                chartInstances[canvasId].destroy();
+            }
+
             if (!history || history.length === 0) {
                 const container = canvas.parentElement;
-                container.innerHTML = '<p style="text-align: center; color: #999; margin-top: 20px;">No historical data available for this entity.</p>';
+                if (container) {
+                    container.innerHTML = '<p style="text-align: center; color: #999; margin-top: 20px;">No historical data available for this entity.</p>';
+                }
                 return;
             }
 
-            const chartData = history.map(item => ({
+            const rawChartData = history.map(item => ({
                 x: new Date(item.lu ? item.lu * 1000 : item.last_changed),
                 y: parseFloat(item.s !== undefined ? item.s : item.state)
             })).filter(item => !isNaN(item.y));
+            
+            const chartData = simplifyData(rawChartData);
 
             if (chartData.length === 0) {
                 const container = canvas.parentElement;
-                container.innerHTML = '<p style="text-align: center; color: #999; margin-top: 20px;">Historical data is not numeric and cannot be displayed.</p>';
+                if (container) {
+                    container.innerHTML = '<p style="text-align: center; color: #999; margin-top: 20px;">Historical data is not numeric and cannot be displayed.</p>';
+                }
                 return;
             }
 
-            new Chart(ctx, {
+            chartInstances[canvasId] = new Chart(ctx, {
                 type: 'line',
                 data: {
                     datasets: [{
                         label: haStates[entityId]?.attributes.friendly_name || entityId,
                         data: chartData,
                         borderColor: 'rgba(75, 192, 192, 1)',
-                        tension: 0.1
+                        tension: 0.1,
+                        pointRadius: 0
                     }]
                 },
                 options: {
@@ -816,6 +945,11 @@ function fetchHistoryAndRenderChart(entityId, canvasId) {
                         },
                         y: {
                             beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
                         }
                     }
                 }
