@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mi Panel Home Assistant</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/gridstack@12.3.3/dist/gridstack.min.css" rel="stylesheet"/>
+    <script src="https://cdn.jsdelivr.net/npm/gridstack@12.3.3/dist/gridstack-all.min.js"></script>
+
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@latest/css/materialdesignicons.min.css" rel="stylesheet">
+    <script type="module" src="video-stream.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+</head>
+<body>
+
+    <div id="login-screen">
+        <h2>Configuración Inicial</h2>
+        <input type="text" id="ha-url" placeholder="URL Home Assistant (ej: http://192.168.1.5:8123)">
+        <input type="password" id="ha-token" placeholder="Long Lived Token">
+        <button onclick="saveConfigAndConnect()">Guardar y Conectar</button>
+    </div>
+
+    <div id="main-ui" style="display:none;">
+        <div id="toolbar">
+            <button id="add-entity-btn" class="toolbar-btn" onclick="openAddModal()">+ Añadir Entidad</button>
+            <button id="add-camera-btn" class="toolbar-btn" onclick="openAddCameraModal()">+ Añadir Cámara</button>
+            <button id="add-graph-btn" class="toolbar-btn" onclick="openAddGraphModal()">+ Añadir Gráfico</button>
+            
+            <div id="dashboard-buttons" class="dashboard-controls">
+                <!-- Los botones del dashboard se insertarán aquí dinámicamente -->
+            </div>
+
+            <div class="settings-menu">
+                <button class="toolbar-btn" onclick="toggleSettingsMenu()">...</button>
+                <div id="settings-dropdown" class="dropdown-content">
+                    <button id="lock-btn" onclick="toggleEditMode()">Bloquear</button>
+                    <button onclick="addDashboard()">+ Añadir Dashboard</button>
+                    <button onclick="deleteDashboard()">- Borrar Dashboard</button>
+                    <button onclick="clearConfig()">Reset Config</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="grid-stack">
+        </div>
+    </div>
+
+    <div id="add-modal" class="modal">
+        <div class="modal-content">
+            <button class="close-modal-btn" onclick="closeModal('add-modal')">&times;</button>
+            <h3>Seleccionar Entidad</h3>
+            <input type="text" id="filter-input" placeholder="Filtrar por nombre..." onkeyup="filterEntities()">
+            <div id="filters">
+                <select id="filter-area" onchange="filterEntities()"></select>
+                <select id="filter-device" onchange="filterEntities()"></select>
+                <select id="filter-type" onchange="filterEntities()"></select>
+                <button onclick="clearFilters()">Limpiar</button>
+            </div>
+            <div id="entity-list">Cargando...</div>
+        </div>
+    </div>
+
+    <div id="light-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="light-modal-title">Control de Luz</h3>
+            <div id="light-brightness-container">
+                <label>Brillo</label>
+                <input type="range" id="light-brightness" class="range-slider" min="0" max="255" step="1">
+            </div>
+            <div id="light-temp-container" style="display:none;">
+                <label>Temperatura de Color</label>
+                <input type="range" id="light-color-temp" class="range-slider" step="1">
+            </div>
+            <div id="light-color-container" style="display:none;">
+                <label>Color</label>
+                <input type="color" id="light-color-picker" style="width:100%; height: 40px;">
+            </div>
+            <br>
+            <button id="light-toggle-btn" style="width:100%">Toggle</button>
+            <br><br>
+            <button onclick="closeModal('light-modal')">Cerrar</button>
+        </div>
+    </div>
+
+    <div id="history-modal" class="modal">
+        <div class="modal-content" style="width: 80%; max-width: 900px;">
+            <h3 id="history-modal-title">Historial del Sensor</h3>
+            <div style="height: 400px;">
+                <canvas id="history-chart"></canvas>
+            </div>
+            <br>
+            <button onclick="closeModal('history-modal')">Cerrar</button>
+        </div>
+    </div>
+
+    <div id="add-camera-modal" class="modal">
+        <div class="modal-content">
+            <h3>Añadir Cámara</h3>
+            <p>Introduce la URL completa del stream para la cámara.</p>
+            <input type="text" id="camera-url-input" placeholder="ej: http://192.168.1.100:1984/api/ws?src=cam" style="width: 95%; margin-bottom: 15px;">
+            <div>
+                <button onclick="addCameraWidget()">Añadir</button>
+                <button onclick="closeModal('add-camera-modal')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="add-graph-modal" class="modal">
+        <div class="modal-content">
+            <button class="close-modal-btn" onclick="closeModal('add-graph-modal')">&times;</button>
+            <h3>Seleccionar Entidad para Gráfico</h3>
+            <input type="text" id="graph-filter-input" placeholder="Filtrar por nombre..." onkeyup="renderGraphEntityList()">
+            <div id="graph-entity-list">Cargando...</div>
+        </div>
+    </div>
+
+    <div id="edit-camera-modal" class="modal">
+        <div class="modal-content">
+            <h3>Editar URL de la Cámara</h3>
+            <input type="text" id="edit-camera-url-input" style="width: 95%; margin-bottom: 15px;">
+            <input type="hidden" id="edit-camera-widget-id">
+            <div>
+                <button onclick="updateCameraUrl()">Guardar</button>
+                <button onclick="closeModal('edit-camera-modal')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+<script src="script.js"></script>
+</body>
+</html>
