@@ -1,21 +1,54 @@
+// weather.js
+
+let weatherIntervals = {}; // Para gestionar los relojes de cada widget
 
 function renderWeatherWidgetContent(container, entityId) {
     if (!container) return;
 
+    // Limpiamos intervalos previos si existían para este widget
+    if (weatherIntervals[entityId]) clearInterval(weatherIntervals[entityId]);
+
     container.innerHTML = `
         <div class="weather-widget">
-            <div class="current-weather">
-                <div class="weather-icon" id="weather-icon-${entityId}"></div>
-                <div class="weather-info">
-                    <div class="weather-state" id="weather-state-${entityId}"></div>
-                    <div class="weather-temp" id="weather-temp-${entityId}"></div>
+            <div class="weather-header">
+                <div class="weather-main-icon" id="weather-icon-${entityId}"></div>
+                <div class="weather-header-info">
+                    <div class="weather-summary" id="weather-summary-${entityId}">Cargando...</div>
+                    <div class="weather-clock" id="weather-clock-${entityId}">--:--</div>
+                    <div class="weather-date" id="weather-date-${entityId}">--/--/----</div>
                 </div>
             </div>
-            <div class="weather-forecast" id="weather-forecast-${entityId}"></div>
+            
+            <div class="weather-forecast-list" id="weather-forecast-${entityId}">
+                </div>
         </div>
     `;
 
+    // Iniciar el reloj
+    startWeatherClock(entityId);
+    
+    // Iniciar datos de HA
     updateWeatherWidgetUI(entityId);
+}
+
+function startWeatherClock(entityId) {
+    const updateTime = () => {
+        const now = new Date();
+        const clockEl = document.getElementById(`weather-clock-${entityId}`);
+        const dateEl = document.getElementById(`weather-date-${entityId}`);
+        
+        if (clockEl) {
+            // Formato HH:MM
+            clockEl.innerText = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+        }
+        if (dateEl) {
+            // Formato DD/MM/YYYY
+            dateEl.innerText = now.toLocaleDateString();
+        }
+    };
+    
+    updateTime(); // Ejecutar inmediatamente
+    weatherIntervals[entityId] = setInterval(updateTime, 1000); // Actualizar cada segundo
 }
 
 async function updateWeatherWidgetUI(entityId) {
@@ -23,89 +56,137 @@ async function updateWeatherWidgetUI(entityId) {
     if (!entity) return;
 
     const iconEl = document.getElementById(`weather-icon-${entityId}`);
-    const stateEl = document.getElementById(`weather-state-${entityId}`);
-    const tempEl = document.getElementById(`weather-temp-${entityId}`);
+    const summaryEl = document.getElementById(`weather-summary-${entityId}`);
     const forecastEl = document.getElementById(`weather-forecast-${entityId}`);
 
-    if (stateEl) {
-        stateEl.innerText = entity.state;
+    // Actualizar Estado y Temperatura actual (ej: "Lluvioso, 12°C")
+    if (summaryEl) {
+        const stateTranslate = translateState(entity.state);
+        const temp = entity.attributes.temperature;
+        summaryEl.innerText = `${stateTranslate}, ${temp}°C`;
     }
 
-    if (tempEl) {
-        tempEl.innerText = `${entity.attributes.temperature} ${entity.attributes.temperature_unit}`;
-    }
-
+    // Actualizar Icono Principal
     if (iconEl) {
         const icon = getWeatherIcon(entity.state);
         iconEl.innerHTML = icon;
     }
 
+    // Actualizar Pronóstico
     if (forecastEl) {
         try {
+            // Llamada al servicio para obtener pronóstico por horas (o diario si está disponible directamente)
+            // Nota: Home Assistant cambió recientemente a get_forecasts. Usamos hourly y lo procesamos.
             const forecastData = await callServiceWithResult('weather', 'get_forecasts', { entity_id: entityId }, { type: 'hourly' });
-            const dailyForecasts = processHourlyForecast(forecastData.response[entityId].forecast);
             
+            if (!forecastData || !forecastData.response || !forecastData.response[entityId]) {
+                 console.warn("No forecast data found");
+                 return;
+            }
+
+            const dailyForecasts = processHourlyForecast(forecastData.response[entityId].forecast).slice(0, 5);
+            
+            // Calcular Min y Max globales de los próximos 5 días para escalar las barras
+            let globalMin = 100;
+            let globalMax = -100;
+            dailyForecasts.forEach(day => {
+                if (day.minTemp < globalMin) globalMin = day.minTemp;
+                if (day.maxTemp > globalMax) globalMax = day.maxTemp;
+            });
+            // Añadimos un pequeño margen visual
+            globalMin -= 2; 
+            globalMax += 2;
+            const totalRange = globalMax - globalMin;
+
             let forecastHTML = '';
-            dailyForecasts.slice(0, 5).forEach(day => {
+            const dayNames = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
+
+            dailyForecasts.forEach(day => {
+                const dateObj = new Date(day.date); // day.date viene del procesador
+                const dayName = dayNames[dateObj.getDay()];
                 const icon = getWeatherIcon(day.condition);
-                const avgTemp = (day.minTemp + day.maxTemp) / 2;
-                const tempColor = getTemperatureColor(avgTemp);
+                
+                // Cálculos para la barra
+                const leftPercent = ((day.minTemp - globalMin) / totalRange) * 100;
+                const widthPercent = ((day.maxTemp - day.minTemp) / totalRange) * 100;
+                
+                // Color dinámico de la barra (Gradiante Teal -> Yellow similar a la imagen)
+                const barGradient = 'linear-gradient(90deg, #7FDBB0 0%, #E8F596 100%)'; 
 
                 forecastHTML += `
-                    <div class="forecast-day">
-                        <div class="forecast-icon">${icon}</div>
-                        <div class="forecast-temp">${day.maxTemp}° / ${day.minTemp}°</div>
-                        <div class="temp-range-line" style="background-color: ${tempColor};"></div>
+                    <div class="forecast-row">
+                        <div class="row-day">${dayName}</div>
+                        <div class="row-icon">${icon}</div>
+                        <div class="row-temp-min">${day.minTemp}°C</div>
+                        <div class="row-bar-container">
+                            <div class="row-bar-fill" style="left: ${leftPercent}%; width: ${widthPercent}%; background: ${barGradient};"></div>
+                        </div>
+                        <div class="row-temp-max">${day.maxTemp}°C</div>
                     </div>
                 `;
             });
             forecastEl.innerHTML = forecastHTML;
-            forecastEl.style.display = 'flex';
+
         } catch (error) {
             console.error('Error getting forecast:', error);
-            forecastEl.style.display = 'none';
+            forecastEl.innerHTML = '<div style="text-align:center; opacity:0.5;">Error cargando pronóstico</div>';
         }
     }
 }
 
-function getTemperatureColor(temp) {
-    // Map temperature (e.g., 0-30°C) to HSL hue (240-360/0)
-    const minTemp = 0;
-    const maxTemp = 30;
-    const minHue = 240; // Blue
-    const maxHue = 360; // Red
-
-    const tempPercent = (Math.max(minTemp, Math.min(temp, maxTemp)) - minTemp) / (maxTemp - minTemp);
-    const hue = minHue + (tempPercent * (maxHue - minHue));
-
-    return `hsl(${hue}, 80%, 50%)`;
+// Mapeo simple de condiciones a español (puedes ampliarlo)
+function translateState(state) {
+    const map = {
+        'clear-night': 'Despejado',
+        'cloudy': 'Nublado',
+        'fog': 'Niebla',
+        'hail': 'Granizo',
+        'lightning': 'Tormenta',
+        'lightning-rainy': 'Tormenta',
+        'partlycloudy': 'Parcialmente nublado',
+        'pouring': 'Lluvia intensa',
+        'rainy': 'Lluvioso',
+        'snowy': 'Nieve',
+        'snowy-rainy': 'Aguanieve',
+        'sunny': 'Soleado',
+        'windy': 'Ventoso',
+        'windy-variant': 'Ventoso'
+    };
+    return map[state] || state;
 }
 
+// Procesar datos horarios para sacar resumen diario (Min/Max/Condición dominante)
 function processHourlyForecast(hourly) {
     const daily = {};
 
     hourly.forEach(hour => {
-        const date = new Date(hour.datetime).toLocaleDateString();
-        if (!daily[date]) {
-            daily[date] = {
+        const d = new Date(hour.datetime);
+        const dateKey = d.toDateString(); // Agrupa por día
+        if (!daily[dateKey]) {
+            daily[dateKey] = {
+                date: d, // Guardamos objeto fecha para sacar el nombre del día luego
                 temps: [],
                 conditions: [],
             };
         }
-        daily[date].temps.push(hour.temperature);
-        daily[date].conditions.push(hour.condition);
+        daily[dateKey].temps.push(hour.temperature);
+        daily[dateKey].conditions.push(hour.condition);
     });
 
-    return Object.keys(daily).map(date => {
-        const day = daily[date];
+    return Object.keys(daily).map(k => {
+        const day = daily[k];
         const minTemp = Math.round(Math.min(...day.temps));
         const maxTemp = Math.round(Math.max(...day.temps));
-        const condition = day.conditions.sort((a, b) => day.conditions.filter(v => v === a).length - day.conditions.filter(v => v === b).length).pop();
-        return { minTemp, maxTemp, condition };
+        // Condición más frecuente
+        const condition = day.conditions.sort((a, b) => 
+            day.conditions.filter(v => v === a).length - day.conditions.filter(v => v === b).length
+        ).pop();
+        return { date: day.date, minTemp, maxTemp, condition };
     });
 }
 
 function getWeatherIcon(condition) {
+    // Asegúrate de que los nombres coincidan con tus archivos en /icons
     const iconMap = {
         'clear-night': 'night.svg',
         'cloudy': 'cloudy.svg',
@@ -125,5 +206,5 @@ function getWeatherIcon(condition) {
     };
 
     const iconName = iconMap[condition] || 'weather.svg';
-    return `<img src="icons/${iconName}" />`;
+    return `<img src="icons/${iconName}" alt="${condition}" />`;
 }
