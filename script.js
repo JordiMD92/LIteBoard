@@ -377,6 +377,8 @@ function loadDashboardLayout() {
                 renderGraphWidgetContent(content, entityId);
             } else if (domain === 'weather') {
                 renderWeatherWidgetContent(content, widgetId);
+            } else if (domain === 'alarm_control_panel') {
+                renderAlarmWidgetContent(content, widgetId);
             }
             else if (!widgetId.startsWith('camera-')) {
                 // This is an entity widget
@@ -413,7 +415,10 @@ function addWidget(entityId) {
     const domain = entityId.split('.')[0];
     if (domain === 'weather') {
         addWeatherWidget(entityId);
-    } else {
+    } else if (domain === 'alarm_control_panel') {
+        addAlarmWidget(entityId);
+    }
+    else {
         const newWidgetEl = grid.addWidget({ w: 2, h: 2, id: entityId, content: '' });
         const el = newWidgetEl.querySelector('.grid-stack-item-content');
         renderWidgetContent(el, entityId);
@@ -432,6 +437,15 @@ function addWeatherWidget(entityId) {
     saveLayout();
 }
 
+function addAlarmWidget(entityId) {
+    const newWidgetEl = grid.addWidget({ w: 2, h: 2, id: entityId, content: '' }); // Ajustar tamaño si es necesario
+    const el = newWidgetEl.querySelector('.grid-stack-item-content');
+    renderAlarmWidgetContent(el, entityId);
+    addDeleteButton(newWidgetEl);
+    closeModal('add-modal');
+    saveLayout();
+}
+
 function renderWidgetContent(container, entityId) {
     if (!container) return;
     const entity = haStates[entityId];
@@ -445,6 +459,25 @@ function renderWidgetContent(container, entityId) {
     container.ontouchstart = (e) => handleStart(e, entityId);
     container.onmouseup = (e) => handleEnd(e, entityId);
     container.ontouchend = (e) => handleEnd(e, entityId);
+    updateWidgetUI(entityId);
+}
+
+function renderAlarmWidgetContent(container, entityId) {
+    if (!container) return;
+    const entity = haStates[entityId];
+    const name = (entity && entity.attributes.friendly_name) || entityId;
+    container.innerHTML = `
+        <div class="alarm-card">
+            <div class="alarm-icon" id="icon-${entityId}"></div>
+            <div class="alarm-name">${name}</div>
+            <div class="alarm-state" id="state-${entityId}"></div>
+            <div class="alarm-actions">
+                <button class="alarm-action-btn arm-away-btn" onclick="armAlarmAway('${entityId}')">Armar Ausente</button>
+                <button class="alarm-action-btn disarm-btn" onclick="disarmAlarm('${entityId}')">Desarmar</button>
+            </div>
+            <input type="password" id="alarm-code-${entityId}" class="alarm-code-input" placeholder="Código" style="display:none;">
+        </div>
+    `;
     updateWidgetUI(entityId);
 }
 
@@ -472,6 +505,20 @@ function handleTap(entityId) {
     }
 }
 
+function armAlarmAway(entityId) {
+    const codeInput = document.getElementById(`alarm-code-${entityId}`);
+    const code = codeInput ? codeInput.value : null;
+    callService('alarm_control_panel', 'alarm_arm_away', { entity_id: entityId, code: code });
+    if (codeInput) codeInput.value = ''; // Clear code after attempting to arm
+}
+
+function disarmAlarm(entityId) {
+    const codeInput = document.getElementById(`alarm-code-${entityId}`);
+    const code = codeInput ? codeInput.value : null;
+    callService('alarm_control_panel', 'alarm_disarm', { entity_id: entityId, code: code });
+    if (codeInput) codeInput.value = ''; // Clear code after attempting to disarm
+}
+
 // --- ACTUALIZACIÓN DE UI ---
 function updateWidgetUI(entityId) {
     const stateEl = document.getElementById(`state-${entityId}`);
@@ -483,6 +530,90 @@ function updateWidgetUI(entityId) {
     const domain = entityId.split('.')[0];
     if (domain === 'weather') {
         updateWeatherWidgetUI(entityId);
+        return;
+    }
+    if (domain === 'alarm_control_panel') {
+        const alarmCard = iconEl ? iconEl.closest('.alarm-card') : null;
+        if (!alarmCard) return;
+
+        const state = entity.state;
+        let icon = "mdi-bell-outline";
+        let stateText = "Desconocido";
+        let cardClass = "";
+        const codeInput = document.getElementById(`alarm-code-${entityId}`);
+        const armAwayBtn = alarmCard.querySelector('.arm-away-btn');
+        const disarmBtn = alarmCard.querySelector('.disarm-btn');
+
+        // Reset button visibility first
+        if (armAwayBtn) armAwayBtn.style.display = 'none';
+        if (disarmBtn) disarmBtn.style.display = 'none';
+
+        switch (state) {
+            case 'disarmed':
+                icon = "mdi-bell-off-outline";
+                stateText = "Desarmada";
+                cardClass = "alarm-disarmed";
+                if (codeInput) codeInput.style.display = 'none';
+                if (armAwayBtn) armAwayBtn.style.display = ''; // Show Arm button
+                break;
+            case 'armed_home':
+                icon = "mdi-bell-alert";
+                stateText = "Armada en Casa";
+                cardClass = "alarm-armed-home";
+                if (codeInput) codeInput.style.display = 'block';
+                if (disarmBtn) disarmBtn.style.display = ''; // Show Disarm button
+                break;
+            case 'armed_away':
+                icon = "mdi-bell-plus";
+                stateText = "Armada Ausente";
+                cardClass = "alarm-armed-away";
+                if (codeInput) codeInput.style.display = 'block';
+                if (disarmBtn) disarmBtn.style.display = ''; // Show Disarm button
+                break;
+            case 'pending':
+                icon = "mdi-bell-sleep";
+                stateText = "Pendiente";
+                cardClass = "alarm-pending";
+                if (codeInput) codeInput.style.display = 'block';
+                if (disarmBtn) disarmBtn.style.display = ''; // Show Disarm button
+                break;
+            case 'triggered':
+                icon = "mdi-bell-ring";
+                stateText = "Activada!";
+                cardClass = "alarm-triggered";
+                if (codeInput) codeInput.style.display = 'block';
+                if (disarmBtn) disarmBtn.style.display = ''; // Show Disarm button
+                break;
+            case 'arming':
+                icon = "mdi-bell-plus";
+                stateText = "Armando...";
+                cardClass = "alarm-arming";
+                if (codeInput) codeInput.style.display = 'block';
+                if (disarmBtn) disarmBtn.style.display = ''; // Show Disarm button
+                break;
+            case 'disarming':
+                icon = "mdi-bell-off";
+                stateText = "Desarmando...";
+                cardClass = "alarm-disarming";
+                if (codeInput) codeInput.style.display = 'block';
+                if (disarmBtn) disarmBtn.style.display = ''; // Show Disarm button
+                break;
+            default:
+                if (codeInput) codeInput.style.display = 'block';
+                // Default to showing both if state is unknown, or decide a safe default
+                if (armAwayBtn) armAwayBtn.style.display = '';
+                if (disarmBtn) disarmBtn.style.display = '';
+                break;
+        }
+
+        iconEl.innerHTML = `<span class="mdi ${icon}" style="font-size: 38px; line-height: 1;"></span>`;
+        if (stateEl) stateEl.innerText = stateText;
+
+        // Limpiar clases de estado anteriores
+        alarmCard.classList.remove("alarm-disarmed", "alarm-armed-home", "alarm-armed-away", "alarm-pending", "alarm-triggered", "alarm-arming", "alarm-disarming");
+        if (cardClass) {
+            alarmCard.classList.add(cardClass);
+        }
         return;
     }
 

@@ -8,6 +8,15 @@
     --active-color: #1db954;
     --border-color: #333333;
     --shadow-color: rgba(0, 0, 0, 0.5);
+
+    /* Alarm Card Specific Colors */
+    --alarm-disarmed-color: #4CAF50; /* Green */
+    --alarm-armed-home-color: #FFC107; /* Amber */
+    --alarm-armed-away-color: #F44336; /* Red */
+    --alarm-pending-color: #2196F3; /* Blue */
+    --alarm-triggered-color: #D32F2F; /* Dark Red */
+    --alarm-arming-color: #FF9800; /* Orange */
+    --alarm-disarming-color: #8BC34A; /* Light Green */
 }
 
 body {
@@ -309,4 +318,146 @@ button:hover, .toolbar-btn:hover {
 .close-modal-btn:hover {
     color: var(--primary-text);
     background: none;
+}
+
+/* --- Alarm Card Styles --- */
+.alarm-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 15px;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.alarm-icon {
+    margin-bottom: 10px;
+    color: var(--secondary-text); /* Default color */
+}
+
+.alarm-name {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 5px;
+    color: var(--primary-text);
+}
+
+.alarm-state {
+    font-size: 14px;
+    margin-bottom: 15px;
+    font-weight: 500;
+}
+
+.alarm-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.alarm-action-btn {
+    padding: 8px 15px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: background-color 0.2s ease;
+    flex-grow: 1;
+    min-width: 80px;
+}
+
+.arm-away-btn {
+    background-color: rgba(var(--alarm-armed-away-color), 0.2);
+    color: var(--alarm-armed-away-color);
+    border: 1px solid var(--alarm-armed-away-color);
+}
+.arm-away-btn:hover {
+    background-color: var(--alarm-armed-away-color);
+    color: white;
+}
+
+.disarm-btn {
+    background-color: rgba(var(--alarm-disarmed-color), 0.2);
+    color: var(--alarm-disarmed-color);
+    border: 1px solid var(--alarm-disarmed-color);
+}
+.disarm-btn:hover {
+    background-color: var(--alarm-disarmed-color);
+    color: white;
+}
+
+.alarm-code-input {
+    width: calc(100% - 30px); /* Adjusting for padding */
+    max-width: 200px;
+    padding: 8px 10px;
+    margin-top: 10px;
+    text-align: center;
+    font-size: 16px;
+    background-color: #333;
+    border: 1px solid #555;
+    border-radius: 6px;
+    color: white;
+}
+.alarm-code-input::placeholder {
+    color: #aaa;
+}
+
+/* State specific styling */
+.alarm-disarmed {
+    /* border: 1px solid var(--alarm-disarmed-color); */
+}
+.alarm-disarmed .alarm-icon { color: var(--alarm-disarmed-color); }
+.alarm-disarmed .alarm-state { color: var(--alarm-disarmed-color); }
+
+.alarm-armed-home {
+    border: 1px solid var(--alarm-armed-home-color);
+}
+.alarm-armed-home .alarm-icon { color: var(--alarm-armed-home-color); }
+.alarm-armed-home .alarm-state { color: var(--alarm-armed-home-color); }
+
+.alarm-armed-away {
+    border: 1px solid var(--alarm-armed-away-color);
+}
+.alarm-armed-away .alarm-icon { color: var(--alarm-armed-away-color); }
+.alarm-armed-away .alarm-state { color: var(--alarm-armed-away-color); }
+
+.alarm-pending {
+    border: 1px solid var(--alarm-pending-color);
+}
+.alarm-pending .alarm-icon { color: var(--alarm-pending-color); }
+.alarm-pending .alarm-state { color: var(--alarm-pending-color); }
+
+.alarm-triggered {
+    border: 1px solid var(--alarm-triggered-color);
+    animation: pulse-red 1s infinite alternate;
+}
+.alarm-triggered .alarm-icon { color: var(--alarm-triggered-color); }
+.alarm-triggered .alarm-state { color: var(--alarm-triggered-color); }
+
+.alarm-arming {
+    border: 1px solid var(--alarm-arming-color);
+    animation: pulse-orange 1s infinite alternate;
+}
+.alarm-arming .alarm-icon { color: var(--alarm-arming-color); }
+.alarm-arming .alarm-state { color: var(--alarm-arming-color); }
+
+.alarm-disarming {
+    border: 1px solid var(--alarm-disarming-color);
+    animation: pulse-green 1s infinite alternate;
+}
+.alarm-disarming .alarm-icon { color: var(--alarm-disarming-color); }
+.alarm-disarming .alarm-state { color: var(--alarm-disarming-color); }
+
+@keyframes pulse-red {
+    from { box-shadow: 0 0 5px rgba(244, 67, 54, 0.7); }
+    to { box-shadow: 0 0 20px rgba(244, 67, 54, 1); }
+}
+
+@keyframes pulse-orange {
+    from { box-shadow: 0 0 5px rgba(255, 152, 0, 0.7); }
+    to { box-shadow: 0 0 20px rgba(255, 152, 0, 1); }
+}
+
+@keyframes pulse-green {
+    from { box-shadow: 0 0 5px rgba(76, 175, 80, 0.7); }
+    to { box-shadow: 0 0 20px rgba(76, 175, 80, 1); }
 }

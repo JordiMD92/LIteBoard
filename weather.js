@@ -77,21 +77,23 @@ async function updateWeatherWidgetUI(entityId) {
         try {
             // Llamada al servicio para obtener pronóstico por horas (o diario si está disponible directamente)
             // Nota: Home Assistant cambió recientemente a get_forecasts. Usamos hourly y lo procesamos.
-            const forecastData = await callServiceWithResult('weather', 'get_forecasts', { entity_id: entityId }, { type: 'hourly' });
+            const forecastData = await callServiceWithResult('weather', 'get_forecasts', { entity_id: entityId }, { type: 'daily' });
             
             if (!forecastData || !forecastData.response || !forecastData.response[entityId]) {
                  console.warn("No forecast data found");
                  return;
             }
 
-            const dailyForecasts = processHourlyForecast(forecastData.response[entityId].forecast).slice(0, 5);
+            const dailyForecasts = forecastData.response[entityId].forecast.slice(0, 7);
+            
+            
             
             // Calcular Min y Max globales de los próximos 5 días para escalar las barras
             let globalMin = 100;
             let globalMax = -100;
             dailyForecasts.forEach(day => {
-                if (day.minTemp < globalMin) globalMin = day.minTemp;
-                if (day.maxTemp > globalMax) globalMax = day.maxTemp;
+                if (day.templow < globalMin) globalMin = day.templow;
+                if (day.temperature > globalMax) globalMax = day.temperature;
             });
             // Añadimos un pequeño margen visual
             globalMin -= 2; 
@@ -102,13 +104,13 @@ async function updateWeatherWidgetUI(entityId) {
             const dayNames = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
 
             dailyForecasts.forEach(day => {
-                const dateObj = new Date(day.date); // day.date viene del procesador
+                const dateObj = new Date(day.datetime); // day.date viene del procesador
                 const dayName = dayNames[dateObj.getDay()];
                 const icon = getWeatherIcon(day.condition);
                 
                 // Cálculos para la barra
-                const leftPercent = ((day.minTemp - globalMin) / totalRange) * 100;
-                const widthPercent = ((day.maxTemp - day.minTemp) / totalRange) * 100;
+                const leftPercent = ((day.templow - globalMin) / totalRange) * 100;
+                const widthPercent = ((day.temperature - day.templow) / totalRange) * 100;
                 
                 // Color dinámico de la barra (Gradiante Teal -> Yellow similar a la imagen)
                 const barGradient = 'linear-gradient(90deg, #7FDBB0 0%, #E8F596 100%)'; 
@@ -117,11 +119,11 @@ async function updateWeatherWidgetUI(entityId) {
                     <div class="forecast-row">
                         <div class="row-day">${dayName}</div>
                         <div class="row-icon">${icon}</div>
-                        <div class="row-temp-min">${day.minTemp}°C</div>
+                        <div class="row-temp-min">${day.templow}°C</div>
                         <div class="row-bar-container">
                             <div class="row-bar-fill" style="left: ${leftPercent}%; width: ${widthPercent}%; background: ${barGradient};"></div>
                         </div>
-                        <div class="row-temp-max">${day.maxTemp}°C</div>
+                        <div class="row-temp-max">${day.temperature}°C</div>
                     </div>
                 `;
             });
