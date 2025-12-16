@@ -379,6 +379,8 @@ function loadDashboardLayout() {
                 renderWeatherWidgetContent(content, widgetId);
             } else if (domain === 'alarm_control_panel') {
                 renderAlarmWidgetContent(content, widgetId);
+            } else if (domain === 'light') {
+                renderLightWidgetContent(content, widgetId);
             }
             else if (!widgetId.startsWith('camera-')) {
                 // This is an entity widget
@@ -417,6 +419,8 @@ function addWidget(entityId) {
         addWeatherWidget(entityId);
     } else if (domain === 'alarm_control_panel') {
         addAlarmWidget(entityId);
+    } else if (domain === 'light') {
+        addLightWidget(entityId);
     }
     else {
         const newWidgetEl = grid.addWidget({ w: 2, h: 2, id: entityId, content: '' });
@@ -441,6 +445,15 @@ function addAlarmWidget(entityId) {
     const newWidgetEl = grid.addWidget({ w: 2, h: 2, id: entityId, content: '' }); // Ajustar tamaño si es necesario
     const el = newWidgetEl.querySelector('.grid-stack-item-content');
     renderAlarmWidgetContent(el, entityId);
+    addDeleteButton(newWidgetEl);
+    closeModal('add-modal');
+    saveLayout();
+}
+
+function addLightWidget(entityId) {
+    const newWidgetEl = grid.addWidget({ w: 2, h: 2, id: entityId, content: '' });
+    const el = newWidgetEl.querySelector('.grid-stack-item-content');
+    renderLightWidgetContent(el, entityId);
     addDeleteButton(newWidgetEl);
     closeModal('add-modal');
     saveLayout();
@@ -478,6 +491,53 @@ function renderAlarmWidgetContent(container, entityId) {
             <input type="password" id="alarm-code-${entityId}" class="alarm-code-input" placeholder="Código" style="display:none;">
         </div>
     `;
+    updateWidgetUI(entityId);
+}
+
+function renderLightWidgetContent(container, entityId) {
+    if (!container) return;
+    const entity = haStates[entityId];
+    const name = (entity && entity.attributes.friendly_name) || entityId;
+    container.innerHTML = `
+        <div class="light-card">
+            <div class="light-header">
+                <div class="light-left-section">
+                    <div class="light-icon-percent">
+                        <div class="light-icon" id="icon-${entityId}"></div>
+                        <div class="light-percent" id="light-percent-${entityId}"></div>
+                    </div>
+                    <div class="light-name">${name}</div>
+                </div>
+                <div class="light-slider-wrapper">
+                    <input type="range" class="light-brightness-slider" id="light-brightness-slider-${entityId}" min="0" max="255" step="1">
+                </div>
+            </div>
+        </div>
+    `;
+    container.onmousedown = (e) => handleStart(e, entityId);
+    container.ontouchstart = (e) => handleStart(e, entityId);
+    container.onmouseup = (e) => handleEnd(e, entityId);
+    container.ontouchend = (e) => handleEnd(e, entityId);
+
+    const slider = document.getElementById(`light-brightness-slider-${entityId}`);
+    if (slider) {
+        // Prevent long press from triggering on slider interaction
+        slider.onmousedown = (e) => e.stopPropagation();
+        slider.ontouchstart = (e) => e.stopPropagation();
+        slider.onmouseup = (e) => e.stopPropagation();
+        slider.ontouchend = (e) => e.stopPropagation();
+
+        slider.oninput = (e) => {
+            const brightness = parseInt(e.target.value);
+            callService('light', 'turn_on', { entity_id: entityId, brightness: brightness });
+        };
+        // Also add a click handler for toggling the light when clicking on other parts of the card
+        container.onclick = (e) => {
+            if (e.target !== slider) { // Don't toggle if slider was clicked
+                handleTap(entityId);
+            }
+        };
+    }
     updateWidgetUI(entityId);
 }
 
@@ -613,6 +673,32 @@ function updateWidgetUI(entityId) {
         alarmCard.classList.remove("alarm-disarmed", "alarm-armed-home", "alarm-armed-away", "alarm-pending", "alarm-triggered", "alarm-arming", "alarm-disarming");
         if (cardClass) {
             alarmCard.classList.add(cardClass);
+        }
+        return;
+    }
+
+    if (domain === 'light') {
+        const lightCard = iconEl ? iconEl.closest('.light-card') : null;
+        if (!lightCard) return;
+
+        const lightPercentEl = document.getElementById(`light-percent-${entityId}`);
+        const lightSlider = document.getElementById(`light-brightness-slider-${entityId}`);
+        const state = entity.state;
+        const brightness = entity.attributes.brightness; // 0-255
+
+        if (state === 'on') {
+            const percent = Math.round((brightness / 255) * 100);
+            if (lightPercentEl) lightPercentEl.innerText = `${percent}%`;
+            if (lightSlider) lightSlider.value = brightness;
+            // Update icon and add active state
+            iconEl.innerHTML = `<span class="mdi mdi-lightbulb-on" style="font-size: 28px; line-height: 1;"></span>`;
+            lightCard.classList.add('active-state');
+        } else {
+            if (lightPercentEl) lightPercentEl.innerText = '0%';
+            if (lightSlider) lightSlider.value = 0;
+            // Update icon and remove active state
+            iconEl.innerHTML = `<span class="mdi mdi-lightbulb" style="font-size: 28px; line-height: 1;"></span>`;
+            lightCard.classList.remove('active-state');
         }
         return;
     }

@@ -461,3 +461,120 @@ button:hover, .toolbar-btn:hover {
     from { box-shadow: 0 0 5px rgba(76, 175, 80, 0.7); }
     to { box-shadow: 0 0 20px rgba(76, 175, 80, 1); }
 }
+
+/* --- Light Card Styles --- */
+.light-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 10px;
+    height: 100%;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.light-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    flex-grow: 1; /* Allow header to take available space */
+}
+
+.light-left-section {
+    display: flex;
+    flex-direction: column; /* Stack icon/percent and name */
+    align-items: flex-start;
+    justify-content: center;
+    min-width: 60px; /* Ensure space for icon and percent */
+    margin-right: 10px;
+}
+
+.light-icon-percent {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px; /* Space between icon/percent and name */
+}
+
+.light-icon {
+    font-size: 28px;
+    margin-right: 8px;
+    color: var(--secondary-text); /* Default off state color */
+}
+
+.light-card.active-state .light-icon {
+    color: var(--active-color); /* On state color */
+}
+
+.light-percent {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--primary-text);
+}
+
+.light-name {
+    font-size: 14px;
+    color: var(--secondary-text);
+    text-align: left;
+    word-break: break-word;
+    line-height: 1.2;
+}
+
+.light-slider-wrapper {
+    flex-grow: 1; /* Slider takes remaining space */
+    display: flex;
+    align-items: center;
+    min-width: 0; /* Allow shrinking */
+}
+
+.light-brightness-slider {
+    width: 100%;
+    -webkit-appearance: none;
+    height: 8px; /* Thinner slider track */
+    border-radius: 4px;
+    background: #555; /* Darker track */
+    outline: none;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.light-brightness-slider:hover {
+    opacity: 1;
+}
+
+.light-brightness-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: var(--accent-color); /* Thumb color */
+    cursor: pointer;
+    border-radius: 50%;
+    box-shadow: 0 0 5px rgba(0,0,0,0.5);
+}
+
+.light-brightness-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: var(--accent-color); /* Thumb color */
+    cursor: pointer;
+    border-radius: 50%;
+    box-shadow: 0 0 5px rgba(0,0,0,0.5);
+}
+
+/* Custom background for the light slider track */
+.light-brightness-slider[type=range] {
+    background-image: -webkit-gradient(linear, left top, right top, 
+                        color-stop(0%, #fff), 
+                        color-stop(100%, var(--active-color)));
+    background-image: -webkit-linear-gradient(left, #fff 0%, var(--active-color) 100%);
+    background-image:    -moz-linear-gradient(left, #fff 0%, var(--active-color) 100%);
+    background-image:     -ms-linear-gradient(left, #fff 0%, var(--active-color) 100%);
+    background-image:      -o-linear-gradient(left, #fff 0%, var(--active-color) 100%);
+    background-image:         linear-gradient(to right, #fff 0%, var(--active-color) 100%);
+    background-repeat: no-repeat;
+    background-size: var(--range-progress, 0%) 100%; /* Initial progress 0% */
+}
+
+/* This is a hack to get the progress bar to work on the range input */
+/* Needs to be handled by JS now, see updateWidgetUI */
