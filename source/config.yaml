@@ -1,7 +1,6 @@
 name: "LiteBoard"
 description: "Dashboard ligero local para Home Assistant"
 version: "1.0.0"
-slug: "liteboard"
 init: false
 arch:
   - aarch64
