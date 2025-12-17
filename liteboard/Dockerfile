@@ -1,14 +1,21 @@
 ARG BUILD_FROM
 FROM $BUILD_FROM
 
-# Instalar Python 3
-RUN apk add --no-cache python3
+# Instala Python y pip
+RUN apk add --no-cache python3 py3-pip
 
-# Directorio de trabajo dentro del contenedor
+# Directorio de trabajo
 WORKDIR /app
 
-# Copiar todos los archivos de tu carpeta actual al contenedor
+# Copia el fichero de dependencias e instálalas
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Copia el resto de la aplicación
 COPY . .
 
-# Arrancar el servidor web simple de Python en el puerto 8000
-CMD [ "python3", "-m", "http.server", "8000" ]
+# Expone el puerto que usará el servidor Flask
+EXPOSE 8090
+
+# Comando para arrancar la aplicación
+CMD [ "python3", "server.py" ]

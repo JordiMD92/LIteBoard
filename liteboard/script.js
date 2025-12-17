@@ -17,9 +17,11 @@ let appData = {
 };
 
 // --- CONFIGURACIÓN & INICIO ---
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     const url = localStorage.getItem('ha_url');
     const token = localStorage.getItem('ha_token');
+    const configId = localStorage.getItem('config_id');
+
     grid = GridStack.init({
         cellHeight: 100,
         margin: 5,
@@ -46,12 +48,17 @@ document.addEventListener("DOMContentLoaded", () => {
             longPressTimer = null;
         }
     });
-    loadAppData();
-    renderDashboardButtons();
-    updateUIMode(); // Poner la UI en el estado inicial correcto
-    if (url && token) {
+
+    if (url && token && configId) {
+        // If we have config, load data and connect
+        await loadAppData(configId);
+        renderDashboardButtons();
+        updateUIMode();
         connectToHA(url, token);
+    } else {
+        // If not, the login screen is shown by default.
     }
+
     // Cerrar menú de settings si se hace click fuera
     window.onclick = function(event) {
         if (!event.target.matches('.toolbar-btn')) {
@@ -66,37 +73,84 @@ document.addEventListener("DOMContentLoaded", () => {
 function saveConfigAndConnect() {
     const url = document.getElementById('ha-url').value.replace(/\/$/, "");
     const token = document.getElementById('ha-token').value;
-    if (!url || !token) return alert("Faltan datos");
+    const configId = document.getElementById('config-id').value.trim();
+
+    if (!url || !token || !configId) return alert("Faltan datos (URL, Token y ID de Configuración)");
+
     localStorage.setItem('ha_url', url);
     localStorage.setItem('ha_token', token);
-    connectToHA(url, token);
+    localStorage.setItem('config_id', configId);
+    
+    // After saving, reload the page to start the new flow in DOMContentLoaded
+    location.reload();
 }
 
 function clearConfig() {
-    if (confirm("¿Borrar toda la configuración (incluyendo dashboards)?")) {
-        localStorage.clear();
+    if (confirm("¿Borrar toda la configuración y desconectar?")) {
+        localStorage.removeItem('ha_url');
+        localStorage.removeItem('ha_token');
+        localStorage.removeItem('config_id');
         location.reload();
     }
 }
 
 // --- GESTIÓN DE DASHBOARDS ---
-function loadAppData() {
-    const data = localStorage.getItem(DASHBOARDS_KEY);
-    const oldLayout = localStorage.getItem('my_dashboard_layout');
-    if (data) {
-        appData = JSON.parse(data);
-    } else if (oldLayout) {
-        appData.dashboards.push({ name: 'Principal', layout: JSON.parse(oldLayout) });
-        localStorage.removeItem('my_dashboard_layout');
-        saveAppData();
-    } else {
-        appData.dashboards.push({ name: 'Principal', layout: [] });
-        saveAppData();
+async function loadAppData(configId) {
+    if (!configId) return;
+    try {
+        const response = await fetch(`/api/dashboard/${configId}`);
+        if (response.ok) {
+            appData = await response.json();
+            // Ensure basic structure is in place
+            if (!appData.dashboards) appData.dashboards = [];
+            if (appData.dashboards.length === 0) {
+                appData.dashboards.push({ name: 'Principal', layout: [] });
+            }
+            if (appData.currentDashboard === undefined || appData.currentDashboard >= appData.dashboards.length) {
+                appData.currentDashboard = 0;
+            }
+        } else {
+            // If not found (404), create a default structure to start with
+            console.log("No existing config found on server, starting fresh.");
+            appData = {
+                dashboards: [{ name: 'Principal', layout: [] }],
+                currentDashboard: 0
+            };
+        }
+    } catch (error) {
+        console.error("Error loading dashboard data:", error);
+        alert("No se pudo cargar la configuración del servidor. Se usará una configuración local temporal.");
+        // Fallback to a temporary local setup
+        appData = {
+            dashboards: [{ name: 'Principal', layout: [] }],
+            currentDashboard: 0
+        };
     }
 }
 
-function saveAppData() {
-    localStorage.setItem(DASHBOARDS_KEY, JSON.stringify(appData));
+
+async function saveAppData() {
+    const configId = localStorage.getItem('config_id');
+    if (!configId) return;
+
+    // Debounce save operation
+    if (saveAppData.timeout) {
+        clearTimeout(saveAppData.timeout);
+    }
+
+    saveAppData.timeout = setTimeout(async () => {
+        try {
+            await fetch(`/api/dashboard/${configId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(appData)
+            });
+        } catch (error) {
+            console.error("Error saving dashboard data:", error);
+            // Maybe show a small, non-intrusive notification to the user
+        }
+        saveAppData.timeout = null;
+    }, 500); // Wait 500ms after the last change to save
 }
 
 function renderDashboardButtons() {
