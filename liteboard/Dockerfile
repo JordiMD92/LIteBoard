@@ -15,7 +15,7 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Expone el puerto que usará el servidor Flask
-EXPOSE 8090
+EXPOSE 8000
 
 # Comando para arrancar la aplicación
 CMD [ "python3", "server.py" ]
