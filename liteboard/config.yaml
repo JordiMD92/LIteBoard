@@ -1,7 +1,7 @@
 name: "LiteBoard"
 description: "Dashboard ligero local para Home Assistant"
 slug: "liteboard"
-version: "1.0.3"
+version: "1.0.4"
 init: false
 arch:
   - aarch64
@@ -11,15 +11,12 @@ arch:
   - i386
 url: "https://github.com/JordiMD92/LIteBoard"
 ports:
-  8000/tcp: null
+  8000/tcp: 8000
 ports_description:
   8000/tcp: "LiteBoard web interface"
 map:
   - config:rw
 startup: application
-webui: "http://[HOST]:[PORT:8000]"
-ingress: true
-ingress_port: 8000
 panel_icon: "mdi:bulletin-board"
 options: {}
 schema: {}
